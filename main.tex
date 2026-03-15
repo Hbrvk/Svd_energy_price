@@ -1,0 +1,131 @@
+\documentclass{article}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
+
+\begin{document}
+%\color{white}
+%\pagecolor[rgb]{0.149,0.145,0.2}
+
+\title{SVD Energy}
+\date{}
+\author{Denis Šmerda}
+\maketitle
+
+\section*{Introduction}
+Hedging energy assets is an important aspect when trying to stabilize revenues.
+Because a forward curve consists of dozens of individual contracts, it is incredibly inefficient to try and hedge each maturity date separately.
+Instead, I need to identify the economic shocks that explain the volatility of these price changes.
+In this project, I apply SVD to historical market data to extract these hidden risk factors, while taking a closer look at the numerical methods that can be applied.
+Using this simplified market structure, I then implement least squares optimization to calculate the combination of exchange contracts needed to hedge an asset's risk.
+
+\section*{Data}
+The dataset I am working with provides hourly day ahead electricity prices in EUR/MWh for six western European countries.
+The data is relatively clean, there are only a few observations missing in each country.
+Moving forward, France is the country that will be analysed in this project, as the dataset is primarily focused on this country.
+Also, there is strong seasonality in daily energy prices, but it differs depending on the weekday.
+To make the models more accurate, I will focus only on business weekdays from now on, but the models could also be applied to only weekend data.
+
+To address the missing values problem, simple linear interpolation across hours is used, rather than dropping the affected rows or applying more complex techniques such as splines.
+After this change the dataset has 24 columns denoting all hours of a day, and 365 observations which stand for individual days ranging from 01/01/2022 to 31/12/2022.
+Further exploring the data, I continue with summary statistics of individual hours over the year, presented in Table \ref{tab:Table 1}.
+\begin{table}[H]
+    \centering
+    \caption{Summary statistics of individual hours}
+      \begin{tabular}{lrrrr}
+        \toprule
+         & 3:00 & 9:00 & 15:00 & 21:00 \\
+        \midrule
+        mean & 233.8 & 360.3 & 291.2 & 346.0 \\
+        std & 110.3 & 223.7 & 149.2 & 162.0 \\
+        min & -0.0 & 22.0 & 28.6 & 15.0 \\
+        25\% & 169.0 & 242.9 & 189.5 & 234.5 \\
+        50\% & 203.8 & 304.3 & 237.2 & 290.6 \\
+        75\% & 301.2 & 461.1 & 392.2 & 443.3 \\
+        max & 585.0 & 2987.8 & 810.7 & 870.0 \\
+        \bottomrule
+      \end{tabular}
+    \label{tab:Table 1}
+\end{table}
+Important discoveries of the summary statistics include the fact that prices reach negative values and there are some rather high observations.
+The unusually high prices were recorded on the fourth of April from 8:00 to 10:00.
+Various sources state that this was a supply shortage in a time of a huge demand, naturally increasing the price, thus it is not an observation error.
+These extreme spikes are left unadjusted, as it can be interesting to see, how the SVD captures tail-risk events.
+
+In Figure \ref{fig:raw_prices} I plot the midday prices over the whole year.
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/raw_prices.png}
+        \caption{Prices at Midday}
+        \label{fig:raw_prices}
+    \end{minipage}\hfill
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/midday_differences.png}
+        \caption{Midday price differences}
+        \label{fig:midday_diff}
+    \end{minipage}
+\end{figure}
+They are certainly very volatile and the volatility does not seem constant.
+After running an ADF test on every column (hour) of this dataset, at the 5\% significance level there is not enough evidence to reject the test hypothesis, that there is no unit root, for 19 of them.
+The following formula
+$$
+\Delta P_{day, hour} = P_{day, hour} - P_{day-1, hour}
+$$
+is applied to the whole dataset, resulting in Figure \ref{fig:midday_diff}.
+It transforms the day-ahead prices to day-ahead price differences and is introduced to make all of the column time series stationary.
+It has to transform the whole dataset, otherwise the SVD results would not make sense.
+With this action the dataset is losing its first observation.
+Logarithmic differences were not available in this dataset because of negative values.
+
+Plot of differences in prices of each hour over the year can be seen in Figure \ref{fig:avg_hour}.
+To deal with the seasonality issue, the following within transformation
+$$
+y_{day, hour}^{centered} = \Delta P_{day, hour} - \frac{1}{N} \sum_{day=1}^{N} {\Delta P}_{day, hour}
+$$
+is applied.
+\begin{figure}[htbp]
+    \centering
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/avg_hour.png}
+        \caption{Hour averages}
+        \label{fig:avg_hour}
+    \end{minipage}\hfill
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/demeaned.png}
+        \caption{Demeaned midday price differences}
+        \label{fig:demeaned}
+    \end{minipage}
+\end{figure}
+Midday absolute demeaned differences in day ahead prices throughout the year can be seen in Figure \ref{fig:demeaned}.
+
+A portion of the summary statistics table after all preceding transformations is presented as Table \ref{tab: Table 2}.
+\begin{table}[H]
+  \centering
+  \caption{Summary statistics of individual hours after transformation}
+    \begin{tabular}{lrrrr}
+      \toprule
+      & 3:00 & 9:00 & 15:00 & 21:00 \\
+      \midrule
+      mean & -0.0 & 0.0 & 0.0 & 0.0 \\
+      std & 50.4 & 232.6 & 61.6 & 54.4 \\
+      min & -194.8 & -2538.8 & -337.4 & -191.0 \\
+      25\% & -18.2 & -30.7 & -27.9 & -24.7 \\
+      50\% & 1.1 & 0.7 & 2.2 & -0.4 \\
+      75\% & 23.5 & 30.7 & 30.9 & 22.0 \\
+      max & 248.1 & 2518.3 & 268.5 & 249.3 \\
+      \bottomrule
+    \end{tabular}
+  \label{tab: Table 2}
+\end{table}
+
+\section*{SVD application}
+
+
+
+\end{document}
