@@ -1,8 +1,11 @@
 import sqlalchemy
 import pandas as pd
+import numpy as np
 from typing import Literal
-from statsmodels.tsa.stattools import adfuller # pyright: ignore[reportUnknownVariableType,reportMissingTypeStubs]
+from statsmodels.tsa.stattools import adfuller
 import datetime as dt
+from numpy.linalg import svd
+
 
 data_path = "sqlite:///data/sql.db"
 table = "electricity_dah_prices"
@@ -54,6 +57,11 @@ def clean_weekdays(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def clean_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    df.loc["2022-04-04", ["8","9"]] = np.nan
+    return interpolate_na(df)
+
+
 def adf_columns(df: pd.DataFrame) -> None:
     for col in df.columns:
         result = adfuller(df[col])[1]
@@ -71,3 +79,22 @@ def demean_data(df: pd.DataFrame) -> pd.DataFrame:
     for col in df.columns:
         df[col] = df[col] - df[col].mean()
     return df
+
+
+def clean_principal_components(df: pd.DataFrame) -> pd.DataFrame:
+    U, s, Vt = svd(df)
+    Vt = pd.DataFrame(Vt)
+    Vt.index = [f"V_{i}" for i in range(1, 25)]
+
+    return Vt
+
+
+def get_singular_values(df: pd.DataFrame) -> pd.DataFrame:
+    U, s ,Vt = svd(df)
+    singular_values = pd.Series(s)
+    x = np.square(singular_values) / sum(np.square(singular_values))
+    var_series = pd.Series([sum(x[:i]) for i in range(1, len(singular_values) + 1)]).round(3)
+    singular_table = pd.concat([singular_values, var_series], axis=1)
+    singular_table.columns = ["singular", "var"]
+
+    return singular_table

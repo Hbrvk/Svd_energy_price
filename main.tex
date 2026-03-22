@@ -3,12 +3,14 @@
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{microtype}
 
 \begin{document}
 %\color{white}
 %\pagecolor[rgb]{0.149,0.145,0.2}
 
-\title{SVD Energy}
+\title{SVD Energy Day-Ahead-Prices}
 \date{}
 \author{Denis Šmerda}
 \maketitle
@@ -17,41 +19,41 @@
 Hedging energy assets is an important aspect when trying to stabilize revenues.
 Because a forward curve consists of dozens of individual contracts, it is incredibly inefficient to try and hedge each maturity date separately.
 Instead, I need to identify the economic shocks that explain the volatility of these price changes.
-In this project, I apply SVD to historical market data to extract these hidden risk factors, while taking a closer look at the numerical methods that can be applied.
+In this project, I apply SVD to historical market data to extract these hidden risk factors, while taking a closer look at the problem from different perspectives.
 Using this simplified market structure, I then implement least squares optimization to calculate the combination of exchange contracts needed to hedge an asset's risk.
 
 \section*{Data}
-The dataset I am working with provides hourly day ahead electricity prices in EUR/MWh for six western European countries.
+The dataset I am working with provides hourly day-ahead electricity prices in EUR/MWh for six western European countries.
 The data is relatively clean, there are only a few observations missing in each country.
 Moving forward, France is the country that will be analysed in this project, as the dataset is primarily focused on this country.
 Also, there is strong seasonality in daily energy prices, but it differs depending on the weekday.
-To make the models more accurate, I will focus only on business weekdays from now on, but the models could also be applied to only weekend data.
+To make the models more accurate, I will focus only on business days from now on, but the models could also be applied to only weekend data.
 
 To address the missing values problem, simple linear interpolation across hours is used, rather than dropping the affected rows or applying more complex techniques such as splines.
-After this change the dataset has 24 columns denoting all hours of a day, and 365 observations which stand for individual days ranging from 01/01/2022 to 31/12/2022.
+After this change, the dataset has 24 columns denoting all hours of a day, and 365 observations which stand for individual days ranging from 01/01/2022 to 31/12/2022.
 Further exploring the data, I continue with summary statistics of individual hours over the year, presented in Table \ref{tab:Table 1}.
 \begin{table}[H]
-    \centering
-    \caption{Summary statistics of individual hours}
-      \begin{tabular}{lrrrr}
-        \toprule
-         & 3:00 & 9:00 & 15:00 & 21:00 \\
-        \midrule
-        mean & 233.8 & 360.3 & 291.2 & 346.0 \\
-        std & 110.3 & 223.7 & 149.2 & 162.0 \\
-        min & -0.0 & 22.0 & 28.6 & 15.0 \\
-        25\% & 169.0 & 242.9 & 189.5 & 234.5 \\
-        50\% & 203.8 & 304.3 & 237.2 & 290.6 \\
-        75\% & 301.2 & 461.1 & 392.2 & 443.3 \\
-        max & 585.0 & 2987.8 & 810.7 & 870.0 \\
-        \bottomrule
-      \end{tabular}
-    \label{tab:Table 1}
+  \centering
+  \caption{Summary statistics of individual hours}
+    \begin{tabular}{lrrrr}
+      \toprule
+       & 3:00 & 9:00 & 15:00 & 21:00 \\
+      \midrule
+    mean & 233.8 & 360.3 & 291.2 & 346.0 \\
+    std & 110.3 & 223.7 & 149.2 & 162.0 \\
+    min & -0.0 & 22.0 & 28.6 & 15.0 \\
+    25\% & 169.0 & 242.9 & 189.5 & 234.5 \\
+    50\% & 203.8 & 304.3 & 237.2 & 290.6 \\
+    75\% & 301.2 & 461.1 & 392.2 & 443.3 \\
+    max & 585.0 & 2987.8 & 810.7 & 870.0 \\
+    \bottomrule
+    \end{tabular}
+  \label{tab:Table 1}
 \end{table}
 Important discoveries of the summary statistics include the fact that prices reach negative values and there are some rather high observations.
 The unusually high prices were recorded on the fourth of April from 8:00 to 10:00.
-Various sources state that this was a supply shortage in a time of a huge demand, naturally increasing the price, thus it is not an observation error.
-These extreme spikes are left unadjusted, as it can be interesting to see, how the SVD captures tail-risk events.
+Various sources state that this was a supply shortage at a time of huge demand, naturally increasing the price, thus it is not an observation error.
+As this is a tail event, unlikely to repeat consistently, the two outlying values are removed and then linearly interpolated along the day observations.
 
 In Figure \ref{fig:raw_prices} I plot the midday prices over the whole year.
 \begin{figure}[htbp]
@@ -70,7 +72,7 @@ In Figure \ref{fig:raw_prices} I plot the midday prices over the whole year.
     \end{minipage}
 \end{figure}
 They are certainly very volatile and the volatility does not seem constant.
-After running an ADF test on every column (hour) of this dataset, at the 5\% significance level there is not enough evidence to reject the test hypothesis, that there is no unit root, for 19 of them.
+After running an ADF test on every column of this dataset, at the 5\% significance level, there is not enough evidence to reject the null hypothesis of a unit root for 23 of them.
 The following formula
 $$
 \Delta P_{day, hour} = P_{day, hour} - P_{day-1, hour}
@@ -81,7 +83,7 @@ It has to transform the whole dataset, otherwise the SVD results would not make 
 With this action the dataset is losing its first observation.
 Logarithmic differences were not available in this dataset because of negative values.
 
-Plot of differences in prices of each hour over the year can be seen in Figure \ref{fig:avg_hour}.
+A plot of differences in prices of each hour over the year can be seen in Figure \ref{fig:avg_hour}.
 To deal with the seasonality issue, the following within transformation
 $$
 y_{day, hour}^{centered} = \Delta P_{day, hour} - \frac{1}{N} \sum_{day=1}^{N} {\Delta P}_{day, hour}
@@ -102,7 +104,7 @@ is applied.
         \label{fig:demeaned}
     \end{minipage}
 \end{figure}
-Midday absolute demeaned differences in day ahead prices throughout the year can be seen in Figure \ref{fig:demeaned}.
+Midday absolute demeaned differences in day-ahead prices throughout the year can be seen in Figure \ref{fig:demeaned}.
 
 A portion of the summary statistics table after all preceding transformations is presented as Table \ref{tab: Table 2}.
 \begin{table}[H]
@@ -110,21 +112,131 @@ A portion of the summary statistics table after all preceding transformations is
   \caption{Summary statistics of individual hours after transformation}
     \begin{tabular}{lrrrr}
       \toprule
-      & 3:00 & 9:00 & 15:00 & 21:00 \\
+       & 3:00 & 9:00 & 15:00 & 21:00 \\
       \midrule
-      mean & -0.0 & 0.0 & 0.0 & 0.0 \\
-      std & 50.4 & 232.6 & 61.6 & 54.4 \\
-      min & -194.8 & -2538.8 & -337.4 & -191.0 \\
-      25\% & -18.2 & -30.7 & -27.9 & -24.7 \\
-      50\% & 1.1 & 0.7 & 2.2 & -0.4 \\
-      75\% & 23.5 & 30.7 & 30.9 & 22.0 \\
-      max & 248.1 & 2518.3 & 268.5 & 249.3 \\
-      \bottomrule
+    mean & -0.0 & 0.0 & 0.0 & 0.0 \\
+    std & 50.43 & 67.59 & 61.63 & 54.44 \\
+    min & -194.81 & -292.64 & -337.42 & -191.00 \\
+    25\% & -18.22 & -28.95 & -27.91 & -24.71 \\
+    50\% & 1.06 & 0.60 & 2.17 & -0.35 \\
+    75\% & 23.45 & 30.14 & 30.85 & 21.99 \\
+    max & 248.06 & 266.06 & 268.48 & 249.33 \\
+    \bottomrule
     \end{tabular}
   \label{tab: Table 2}
 \end{table}
 
 \section*{SVD application}
+The previous section led to the application of the singular value decomposition, which is used in the majority of data-related fields.
+In this study, I would like to take a look at interpretations from three points of view and present them one by one.
+I will begin with general math, more precisely linear algebra, which explains how the model works and how it can be applied to my dataset.
+Next, I will translate these mathematical components into practical energy market concepts.
+Lastly, to bring deeper insight into this topic, I will move on to the economic aspect of energy prices with supply and demand tools.
+
+\subsection*{1) Linear Algebra}
+Let me suppose that $A = (a_{i,j})_{m, n}$, where $\forall i \in \{ 1, \dots, m \}, j \in \{ 1, \dots, n \}: a_{i,j} \in \mathbb{R}$ and its rank is $r \in \mathbb{N}$.
+Further, $\mathbb{R}^{m}$ is a vector space and $\forall j: \vec{a}_j \in \mathbb{R}^m$.
+With these assumptions, there exist orthonormal bases $B = (\vec{v}_1, \dots, \vec{v}_n)$, $C = (\vec{u}_1, \dots, \vec{u}_m)$ of vector spaces $\mathbb{R}^{n}, \mathbb{R}^{m}$ respectively and real values $\sigma_1, \dots, \sigma_r > 0$.
+This allows for the following decomposition
+$$
+A = UDV^{-1} = UDV^{T},
+$$
+where $U = [id]^{C}_{K_m} = (\vec{u}_1, \dots, \vec{u}_m)$, $V = [id]^{B}_{K_n} = (\vec{v}_1, \dots, \vec{v}_n)$ and 
+$D = diag_{m \times n}(\sigma_1, \dots, \sigma_r)$ ($K$ is the canonical basis).
+Also the dyadic decomposition is applicable, which reads
+$$
+A = \sigma_1 \vec{u}_1 \vec{v}_1^T + \dots + \sigma_r \vec{u}_r \vec{v}_r^T
+$$
+and is important, because it allows for best lower-rank approximations of the matrix $A$.
+The basis B contains vectors that maximize $||A\vec{x}||$.
+So vector $\vec{v}_1$ is of length one and depicts an element with the largest impact on $||A\vec{x}||$.
+Singular decomposition thus helps determine which elements affect $||A\vec{x}||$ and to what extent.
+
+\subsection*{2) Energy Market and Volatility}
+Singular decomposition thus helps me eliminate market noise by approximating the matrix with its lower-rank representation.
+When considering the dataset as matrix $A$, each column of $A$ is in the vector space of daily price changes.
+Therefore, multiplying the matrix $A$ by a daily production profile vector $\vec{x}$ computes the historical daily financial profits and losses of that specific portfolio.
+The norm $||A\vec{x}||$ can be interpreted as the total historical volatility of a specific portfolio defined by the production vector $\vec{x}$.
+Before analyzing the vectors $(\vec{v}_1, \dots, \vec{v}_n)$, singular values obtained by the SVD, shown in Table \ref{tab:Table 3}, allow to calculate the percentage of the total variation explained by each lower-rank approximation.
+\begin{table}[H]
+  \centering
+  \caption{Singular Values}
+    \begin{tabular}{lrr}
+    \toprule
+    & Singular Value & $R^2$ \\
+    \midrule
+    $\sigma_1$ & 3486.7 & 0.603 \\
+    $\sigma_2$ & 1641.5 & 0.737 \\
+    $\sigma_3$ & 1215.1 & 0.810 \\
+    $\sigma_4$ & 988.1 & 0.858 \\
+    $\sigma_5$ & 762.2 & 0.887 \\
+    $\sigma_6$ & 602.7 & 0.905 \\
+    \bottomrule
+    \end{tabular}
+  \label{tab:Table 3}
+\end{table}
+The second column of Table \ref{tab:Table 3} is calculated via the $R^2$ formula
+$$
+R^2 = \frac{ESS}{TSS} = \sum_{j = 1}^{i}\frac{\sigma_j^2}{\sum_{t = 1}^{24}\sigma_t^2},
+$$
+where $j \leq i, j \in \{ 1, \dots, 24 \}$.
+According to these results, 90 \% of total variance is explained by the first six columns of $V$.
+These vectors are often referred to as principal components in financial literature and they dictate the exact geometric shapes (seen in Figure \ref{fig:1_3}) of independent market movements.
+\begin{figure}[htbp]
+    \centering
+    \caption{Principal Components}
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/one_three.png}
+        \label{fig:1_3}
+    \end{minipage}\hfill
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/four_six.png}
+        \label{fig:4_6}
+    \end{minipage}
+\end{figure}
+So a specific historical day in the dataset can be represented as a linear combination of these six curves with 90 \% accuracy.
+By approximating the original matrix with a rank-six dyadic product, I get rid of unpredictable noise, which, if included, would lead to overfitting.
+
+\subsection*{3) Economic Interpretation}
+To understand the geometric shapes of individual principal components deeper, I must further examine the French energy structure.
+From Figure \ref{fig:structure} I am able to determine that most of French demand is satisfied by nuclear power plants and the rest is filled by renewable sources and fossil fuels. 
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/en_structure.png}
+        \caption{France Energy Structure}
+        \label{fig:structure}
+    \end{minipage}\hfill
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{visual/supply_demand.png}
+        \caption{Supply and Demand}
+        \label{fig:sup_dem}
+    \end{minipage}
+\end{figure}
+On the right side, Figure \ref{fig:sup_dem} shows an example of a possible supply and demand graph.
+The energy market utilizes a specific microeconomic model called the merit order curve.
+As there is an unsolved problem with storing energy, producers want to sell energy with the least marginal costs, making them cheaper.
+So the supply curve is constructed by ordering all available power plants from the lowest marginal cost to the highest marginal cost.
+Nuclear power plants follow renewable resources with the marginal costs levels.
+Fossil fuel plants form the last section of the curve.
+Because most people do not check electricity price daily or in faster frequencies, making electricity consumption inelastic, the short-term demand curve is nearly vertical.
+
+Generally known shifts in the demand curve are caused by the time of day.
+In the morning and evening, people and businesses consume more electricity, which shifts the vertical demand curve to the right.
+This means the demand curve intersects the steep fossil fuel section of the supply curve, causing higher prices.
+These daily demand cycles align with the first and second principal components, which represent the overall price shift and the morning to evening price spread.
+
+On the supply side, solar power generation peaks at midday.
+Since solar energy has zero marginal costs, it pushes the supply curve to the right.
+Therefore, the demand curve crosses the supply curve at a much lower price point.
+This specific price drop is exactly what the third principal component captures.
+By linking these market mechanics to the linear algebra results, it is clear that the calculated vectors represent actual physical shifts in the grid.
+
+\section*{Least Squares Optimization}
 
 
 
