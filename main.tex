@@ -128,9 +128,9 @@ A portion of the summary statistics table after all preceding transformations is
 
 \section*{SVD application}
 The previous section led to the application of the singular value decomposition, which is used in the majority of data-related fields.
-In this study, I would like to take a look at interpretations from three points of view and present them one by one.
+In this study, I would like to take a look at interpretations from four points of view and present them one by one.
 I will begin with general math, more precisely linear algebra, which explains how the model works and how it can be applied to my dataset.
-Next, I will translate these mathematical components into practical energy market concepts.
+Next, I will translate these mathematical components into practical energy market concepts and check the numerical properties of the methods.
 Lastly, to bring deeper insight into this topic, I will move on to the economic aspect of energy prices with supply and demand tools.
 
 \subsection*{1) Linear Algebra}
@@ -177,9 +177,9 @@ Before analyzing the vectors $(\vec{v}_1, \dots, \vec{v}_n)$, singular values ob
 \end{table}
 The second column of Table \ref{tab:Table 3} is calculated via the $R^2$ formula
 $$
-R^2 = \frac{ESS}{TSS} = \sum_{j = 1}^{i}\frac{\sigma_j^2}{\sum_{t = 1}^{24}\sigma_t^2},
+R^2 = \frac{ESS}{TSS} = \frac{\sum_{j = 1}^{i} \sigma_j^2}{\sum_{t = 1}^{24}\sigma_t^2},
 $$
-where $j \leq i, j \in \{ 1, \dots, 24 \}$.
+where $j \leq i, i \in \{ 1, \dots, 24 \}$.
 According to these results, 90 \% of total variance is explained by the first six columns of $V$.
 These vectors are often referred to as principal components in financial literature and they dictate the exact geometric shapes (seen in Figure \ref{fig:1_3}) of independent market movements.
 \begin{figure}[htbp]
@@ -199,8 +199,44 @@ These vectors are often referred to as principal components in financial literat
 So a specific historical day in the dataset can be represented as a linear combination of these six curves with 90 \% accuracy.
 By approximating the original matrix with a rank-six dyadic product, I get rid of unpredictable noise, which, if included, would lead to overfitting.
 
-\subsection*{3) Economic Interpretation}
-To understand the geometric shapes of individual principal components deeper, I must further examine the French energy structure.
+\subsection*{3) Numerical Mathematics}
+To further justify selection of the new lower-level rank, one can turn to numerical analysis.
+Calculating the relative error shows how much information is lost during data compression.
+Two common mathematical tools are used for this.
+The Euclidean norm measures the largest single error, so the relative error is denoted as
+$$
+\frac{||A - A_r||_2}{||A||_2},
+$$
+presented in red on the left of Figure \ref{fig:error}.
+And the Frobenius norm measures the total size of all the dropped data,
+$$
+\frac{||A - A_r||_F}{||A||_F},
+$$
+also in red, seen on the right of the same figure.
+For both methods, the real error is calculated by comparing the new matrix to the original one.
+\begin{figure}[H]
+    \centering
+    \caption{Error and Rank relationship}
+    \includegraphics[width=\textwidth]{visual/num.png}
+    \label{fig:error}
+\end{figure}
+The blue dashed line resembles the theoretical error.
+This is then checked against the theoretical error, which comes only from the singular values.
+The theoretical Euclidean error is the first dropped singular value divided by the largest one,
+$$
+\frac{\sigma_{r + 1}}{\sigma_1},
+$$
+and the theoretical Frobenius error adds up the squares of all the dropped singular values,
+$$
+\sqrt{1 - R^2} = \sqrt{\frac{\sigma_{r + 1}^{2} + \dots + \sigma_{24}^2}{\sigma_{1}^{2} + \dots + \sigma_{24}^2}}.
+$$
+This connects the error directly to the explained variance established earlier.
+The real and theoretical values visually match, which indicates the calculation is correct.
+The lines drop quickly at first and flatten out around a rank of six.
+Adding more components after this point does not improve accuracy much.
+
+\subsection*{4) Economic Interpretation}
+To understand the geometric shapes of individual principal components further, I must further examine the French energy structure.
 From Figure \ref{fig:structure} I am able to determine that most of French demand is satisfied by nuclear power plants and the rest is filled by renewable sources and fossil fuels. 
 \begin{figure}[H]
     \centering
@@ -235,6 +271,9 @@ Since solar energy has zero marginal costs, it pushes the supply curve to the ri
 Therefore, the demand curve crosses the supply curve at a much lower price point.
 This specific price drop is exactly what the third principal component captures.
 By linking these market mechanics to the linear algebra results, it is clear that the calculated vectors represent actual physical shifts in the grid.
+
+
+
 
 \section*{Least Squares Optimization}
 
