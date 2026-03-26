@@ -22,7 +22,7 @@ Instead, I need to identify the economic shocks that explain the volatility of t
 In this project, I apply SVD to historical market data to extract these hidden risk factors, while taking a closer look at the problem from different perspectives.
 Using this simplified market structure, I then implement least squares optimization to calculate the combination of exchange contracts needed to hedge an asset's risk.
 
-\section*{Data}
+\section{Data}
 The dataset I am working with provides hourly day-ahead electricity prices in EUR/MWh for six western European countries.
 The data is relatively clean, there are only a few observations missing in each country.
 Moving forward, France is the country that will be analysed in this project, as the dataset is primarily focused on this country.
@@ -126,14 +126,14 @@ A portion of the summary statistics table after all preceding transformations is
   \label{tab: Table 2}
 \end{table}
 
-\section*{SVD application}
+\section{SVD application}
 The previous section led to the application of the singular value decomposition, which is used in the majority of data-related fields.
 In this study, I would like to take a look at interpretations from four points of view and present them one by one.
 I will begin with general math, more precisely linear algebra, which explains how the model works and how it can be applied to my dataset.
 Next, I will translate these mathematical components into practical energy market concepts and check the numerical properties of the methods.
 Lastly, to bring deeper insight into this topic, I will move on to the economic aspect of energy prices with supply and demand tools.
 
-\subsection*{1) Linear Algebra}
+\subsection{Linear Algebra}
 Let me suppose that $A = (a_{i,j})_{m, n}$, where $\forall i \in \{ 1, \dots, m \}, j \in \{ 1, \dots, n \}: a_{i,j} \in \mathbb{R}$ and its rank is $r \in \mathbb{N}$.
 Further, $\mathbb{R}^{m}$ is a vector space and $\forall j: \vec{a}_j \in \mathbb{R}^m$.
 With these assumptions, there exist orthonormal bases $B = (\vec{v}_1, \dots, \vec{v}_n)$, $C = (\vec{u}_1, \dots, \vec{u}_m)$ of vector spaces $\mathbb{R}^{n}, \mathbb{R}^{m}$ respectively and real values $\sigma_1, \dots, \sigma_r > 0$.
@@ -152,7 +152,7 @@ The basis B contains vectors that maximize $||A\vec{x}||$.
 So vector $\vec{v}_1$ is of length one and depicts an element with the largest impact on $||A\vec{x}||$.
 Singular decomposition thus helps determine which elements affect $||A\vec{x}||$ and to what extent.
 
-\subsection*{2) Energy Market and Volatility}
+\subsection{Energy Market and Volatility}
 Singular decomposition thus helps me eliminate market noise by approximating the matrix with its lower-rank representation.
 When considering the dataset as matrix $A$, each column of $A$ is in the vector space of daily price changes.
 Therefore, multiplying the matrix $A$ by a daily production profile vector $\vec{x}$ computes the historical daily financial profits and losses of that specific portfolio.
@@ -199,7 +199,7 @@ These vectors are often referred to as principal components in financial literat
 So a specific historical day in the dataset can be represented as a linear combination of these six curves with 90 \% accuracy.
 By approximating the original matrix with a rank-six dyadic product, I get rid of unpredictable noise, which, if included, would lead to overfitting.
 
-\subsection*{3) Numerical Mathematics}
+\subsection{Numerical Mathematics}
 To further justify selection of the new lower-level rank, one can turn to numerical analysis.
 Calculating the relative error shows how much information is lost during data compression.
 Two common mathematical tools are used for this.
@@ -235,7 +235,7 @@ The real and theoretical values visually match, which indicates the calculation 
 The lines drop quickly at first and flatten out around a rank of six.
 Adding more components after this point does not improve accuracy much.
 
-\subsection*{4) Economic Interpretation}
+\subsection{Economic Interpretation}
 To understand the geometric shapes of individual principal components further, I must further examine the French energy structure.
 From Figure \ref{fig:structure} I am able to determine that most of French demand is satisfied by nuclear power plants and the rest is filled by renewable sources and fossil fuels. 
 \begin{figure}[H]
@@ -256,9 +256,8 @@ From Figure \ref{fig:structure} I am able to determine that most of French deman
 On the right side, Figure \ref{fig:sup_dem} shows an example of a possible supply and demand graph.
 The energy market utilizes a specific microeconomic model called the merit order curve.
 As there is an unsolved problem with storing energy, producers want to sell energy with the least marginal costs, making them cheaper.
-So the supply curve is constructed by ordering all available power plants from the lowest marginal cost to the highest marginal cost.
-Nuclear power plants follow renewable resources with the marginal costs levels.
-Fossil fuel plants form the last section of the curve.
+And so the supply curve is constructed by ordering all available power plants from the lowest marginal cost to the highest marginal cost.
+Nuclear power plants follow renewable resources and fossil fuel plants form the last section of the curve.
 Because most people do not check electricity price daily or in faster frequencies, making electricity consumption inelastic, the short-term demand curve is nearly vertical.
 
 Generally known shifts in the demand curve are caused by the time of day.
@@ -272,10 +271,42 @@ Therefore, the demand curve crosses the supply curve at a much lower price point
 This specific price drop is exactly what the third principal component captures.
 By linking these market mechanics to the linear algebra results, it is clear that the calculated vectors represent actual physical shifts in the grid.
 
+\section{Least Squares Hedging Optimization}
+Suppose owning a non-standard energy contract, that is a tailored agreement between a supplier and a customer.
+Let $\vec{x}$ be the production profile of this contract in one day.
+To hedge against this asset one must neutralize its risks.
+So the first step towards achieving this goal is to find the profits and losses of $\vec{x}$ based on historical data.
+This can be achieved with a simple multiplication, $A\vec{x} = \vec{y}$.
+A linear model
+$$
+\vec{y} = \beta_1 A\vec{v_1} + \dots + \beta_6 A\vec{v_6} + \vec{\epsilon} \iff \vec{y} = X\vec{\beta} + \vec{\epsilon}
+$$
+can be presented to find the effects of each principal component.
+There is no intercept included in this model, because a within transformation was used.
+Therefore if it was included it would be zero.
+Let $V'$ be the first six columns of matrix $V$.
+With matrix algebra this model can be boiled down with the following steps
+$$
+\vec{\beta} = ((AV')^T(AV'))^{-1}(AV')^TA\vec{x} = 
+$$
+$$
+= (I_{24\times6}^T D U^T U D I_{24\times6})^{-1}(I_{24\times6}^T D U^T U D V^T)\vec{x}=
+$$
+$$
+= D^{-2}_{6\times6}D^2_{6\times24}V^T\vec{x} = V'^T\vec{x},
+$$
+algebraically represented as
+$$
+x_i = \beta_1v_{i,1} + \dots + \beta_6v_{i,6} + \epsilon_i.
+$$
+The facts that $A=UDV^T$ and $U^TU = I$ were used in the calculations.
+This outcome brings an entirely new interpretation of the model, one that is not as intuitive.
+Because the financial profit is calculated by multiplying the hourly price by $\vec{x}$, finding the best hedge is the same as finding which principle components best overlap with the energy production.
+So regressing production vector $\vec{x}$ onto $V'$ calculates those overlaps and measures how much of  generation happens during the hours that an economic shock shifts the market.
+
+%When dealing with a specific vector of production, for example the Gaussian bell curve $N(12,\sigma = 2.5)$, one may obtain regression results similar to the one presented in Table \ref{ta}
 
 
-
-\section*{Least Squares Optimization}
 
 
 
