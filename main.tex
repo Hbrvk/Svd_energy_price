@@ -30,7 +30,7 @@ Also, there is strong seasonality in daily energy prices, but it differs dependi
 To make the models more accurate, I will focus only on business days from now on, but the models could also be applied to only weekend data.
 
 To address the missing values problem, simple linear interpolation across hours is used, rather than dropping the affected rows or applying more complex techniques such as splines.
-After this change, the dataset has 24 columns denoting all hours of a day, and 365 observations which stand for individual days ranging from 01/01/2022 to 31/12/2022.
+After this change, the dataset has 24 columns denoting all hours of a day, and 260 observations which stand for individual business days ranging from 01/01/2022 to 31/12/2022.
 Further exploring the data, I continue with summary statistics of individual hours over the year, presented in Table \ref{tab:Table 1}.
 \begin{table}[H]
   \centering
@@ -71,7 +71,7 @@ In Figure \ref{fig:raw_prices} I plot the midday prices over the whole year.
         \label{fig:midday_diff}
     \end{minipage}
 \end{figure}
-They are certainly very volatile and the volatility does not seem constant.
+They are certainly very volatile and the volatility does not seem to be constant.
 After running an ADF test on every column of this dataset, at the 5\% significance level, there is not enough evidence to reject the null hypothesis of a unit root for 23 of them.
 The following formula
 $$
@@ -143,7 +143,7 @@ A = UDV^{-1} = UDV^{T},
 $$
 where $U = [id]^{C}_{K_m} = (\vec{u}_1, \dots, \vec{u}_m)$, $V = [id]^{B}_{K_n} = (\vec{v}_1, \dots, \vec{v}_n)$ and 
 $D = diag_{m \times n}(\sigma_1, \dots, \sigma_r)$ ($K$ is the canonical basis).
-Also the dyadic decomposition is applicable, which reads
+Also the dyadic decomposition is applicable, which states
 $$
 A = \sigma_1 \vec{u}_1 \vec{v}_1^T + \dots + \sigma_r \vec{u}_r \vec{v}_r^T
 $$
@@ -153,7 +153,7 @@ So vector $\vec{v}_1$ is of length one and depicts an element with the largest i
 Singular decomposition thus helps determine which elements affect $||A\vec{x}||$ and to what extent.
 
 \subsection{Energy Market and Volatility}
-Singular decomposition thus helps me eliminate market noise by approximating the matrix with its lower-rank representation.
+Singular decomposition helps me eliminate market noise by approximating the matrix with its lower-rank representation.
 When considering the dataset as matrix $A$, each column of $A$ is in the vector space of daily price changes.
 Therefore, multiplying the matrix $A$ by a daily production profile vector $\vec{x}$ computes the historical daily financial profits and losses of that specific portfolio.
 The norm $||A\vec{x}||$ can be interpreted as the total historical volatility of a specific portfolio defined by the production vector $\vec{x}$.
@@ -220,8 +220,7 @@ For both methods, the real error is calculated by comparing the new matrix to th
     \includegraphics[width=\textwidth]{visual/num.png}
     \label{fig:error}
 \end{figure}
-The blue dashed line resembles the theoretical error.
-This is then checked against the theoretical error, which comes only from the singular values.
+The blue dashed line resembles the theoretical error, which comes only from the singular values.
 The theoretical Euclidean error is the first dropped singular value divided by the largest one,
 $$
 \frac{\sigma_{r + 1}}{\sigma_1},
@@ -275,6 +274,8 @@ By linking these market mechanics to the linear algebra results, it is clear tha
 Suppose owning a non-standard energy contract, that is a tailored agreement between a supplier and a customer.
 Let $\vec{x}$ be the production profile of this contract in one day.
 To hedge against this asset one must neutralize its risks.
+
+\subsection{Regression Model}
 So the first step towards achieving this goal is to find the profits and losses of $\vec{x}$ based on historical data.
 This can be achieved with a simple multiplication, $A\vec{x} = \vec{y}$.
 A linear model
@@ -301,13 +302,69 @@ x_i = \beta_1v_{i,1} + \dots + \beta_6v_{i,6} + \epsilon_i.
 $$
 The facts that $A=UDV^T$ and $U^TU = I$ were used in the calculations.
 This outcome brings an entirely new interpretation of the model, one that is not as intuitive.
-Because the financial profit is calculated by multiplying the hourly price by $\vec{x}$, finding the best hedge is the same as finding which principle components best overlap with the energy production.
+Because the financial profit is calculated by multiplying the hourly price by $\vec{x}$, finding the best hedge is the same as finding which principal components best overlap with the energy production.
 So regressing production vector $\vec{x}$ onto $V'$ calculates those overlaps and measures how much of  generation happens during the hours that an economic shock shifts the market.
 
-%When dealing with a specific vector of production, for example the Gaussian bell curve $N(12,\sigma = 2.5)$, one may obtain regression results similar to the one presented in Table \ref{ta}
+\subsection{Model Results}
+When dealing with a specific vector of production, for example functional values of the Gaussian bell $N(12,\sigma = 2.5)$ curve in an array, which are supposed to represent supply of solar energy, one may obtain regression results similar to the one presented in Table \ref{tab:Table 4}, where the explained variance $R^2 = 0.943$.
+\begin{table}[H]
+  \centering
+  \caption{Regression Results}
+    \begin{tabular}{lrrrrrrr}
+    \toprule
+    vector & coef & std err & t & $P>|t|$ & [0.025 & 0.975] \\
+    \midrule
+    $\vec{v}_1$ & -73.3826 & 5.946 & -12.341 & 0.000 & -85.875 & -60.890 \\
+    $\vec{v}_2$ & -3.0515 & 5.946 & -0.513 & 0.614 & -15.544 & 9.441 \\
+    $\vec{v}_3$ & 63.0138 & 5.946 & 10.597 & 0.000 & 50.522 & 75.506 \\
+    $\vec{v}_4$ & -30.3312 & 5.946 & -5.101 & 0.000 & -42.824 & -17.839 \\
+    $\vec{v}_5$ & 3.4014 & 5.946 & 0.572 & 0.574 & -9.091 & 15.894 \\
+    $\vec{v}_6$ & 12.0263 & 5.946 & 2.023 & 0.058 & -0.466 & 24.519 \\
+    \bottomrule
+    \end{tabular}
+  \label{tab:Table 4}
+\end{table}
+Since the coefficients have an unintuitive interpretation, it is easier to remember what happens when a linear regressing is run.
+A coefficient is the dot product of the dependent production vector and the respective principal component.
+The production vector has exposure to principal components one, three, four and six.
+Some of them are exposed in the positive direction and others in the negative.
+The coefficients of vectors two and five are statistically insignificant, which makes sense, since they are asymmetrical with positive and negative values and the vector $\vec{x}$ is symmetrical around noon, making the dot product close to zero.
+There is a small sample size of 24 and 18 degrees of freedom, thus any asymptotic properties can be ignored.
+The $R^2$ value is consistent with a statement made earlier, that a linear combination of the first six principal components can represent a day with 90\% accuracy.
+Standard error is constant no matter the principal component, that can be explained by the formula used to calculate them, $\sigma^2(V^TV)^{-1}$, and orthonormality of $V$.
 
+\subsection{Residual \& Assumptions Analysis}
+Figure 9 provides a visualization of the residuals.
+\begin{figure}[H]
+    \centering
+    \caption{Visualization of the Residuals}
+    \includegraphics[width= 50mm]{visual/resid.png}
+    \label{fig:residuals}
+\end{figure}
+The graph displays a wave pattern instead of a random scatter of points, which indicates that the errors are autocorrelated.
+Also, the Durbin-Watson statistic is 1.017.
+This value being close to one hints to severe positive autocorrelation.
+Because the errors depend on previous hours, the standard regression assumption of independent residuals is violated.
+The variance of the residuals is not constant across the day, as the solar profile produces zero electricity at night and reaches its peak at noon.
+The errors are completely flat at night and swing heavily during the day, which indicated heteroskedasticity.
+The residuals still keep a perfectly symmetrical shape over the day.
+The Jarque-Bera test gives a probability value of 0.991, indicating the residuals follow a normal distribution.
+Since the goal of this model is to find the overlap for hedging rather than hypothesis testing, the model remains usable for financial applications.
 
+\subsection{Hedging Strategy}
+The regression results state the exact market exposure of the tailored energy asset.
+To stabilize revenues, one must neutralize these risks by taking opposite financial positions of standard contracts.
 
+Standard market products usually include base contracts covering the entire day.
+The principal component exposure of these standard contracts needs to be calculated.
+Comparing the standard contract exposures to the tailored asset creates a system of equations and solving this system provides the exact volume of standard contracts required to sell on the exchange.
+This resulting portfolio offsets the hidden risk factors.
 
+\section{Conclusion}
+This project applied SVD to historical day-ahead electricity prices to find an optimal hedging curve.
+By transforming the data into stationary daily price differences, the principal components were extracted.
+Numerical analysis demonstrated that a small number of principal components can explain 90 \% of market volatility.
+Furthermore, the principal components mirror economic movements of the supply shifts and the merit order curve.
+Regressing a production profile onto these components reveals the vulnerability of the non-standard asset to independent market shocks.
 
 \end{document}

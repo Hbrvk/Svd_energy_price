@@ -5,6 +5,8 @@ from typing import Literal
 from statsmodels.tsa.stattools import adfuller
 import datetime as dt
 from numpy.linalg import svd
+import statsmodels.api as sm
+from numpy.typing import ArrayLike, NDArray
 
 
 data_path = "sqlite:///data/sql.db"
@@ -98,3 +100,9 @@ def get_singular_values(df: pd.DataFrame) -> pd.DataFrame:
     singular_table.columns = ["singular", "var"]
 
     return singular_table
+
+
+def regression(x: ArrayLike, matrix: NDArray) -> None:
+    model = sm.OLS(x, matrix)
+    res = model.fit()
+    print(res.summary())
